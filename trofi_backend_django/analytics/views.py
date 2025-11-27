@@ -1,5 +1,6 @@
 from django.db.models.functions import TruncMonth
-from django.db.models import Count, Avg
+from django.db.models import Count, Avg, Q
+from django.db import IntegrityError
 
 from .models import UserAnalytics, Job, ReviewAnalytics
 from rest_framework.views import APIView
@@ -7,173 +8,253 @@ from rest_framework.response import Response
 from rest_framework import status
 
 # ===========================
-# 🎯 SYNC VIEWS (EXPRESS → DJANGO)
+# SYNC VIEWS (EXPRESS a DJANGO)
 # ===========================
 
 class SyncJobView(APIView):
+    """
+    Sincronizar oficios desde Express
+    """
     def post(self, request):
-        """
-        Crear oficio desde Express
-        """
+        """Crear oficio desde Express"""
         from .serializers import JobSyncSerializer
+        
         serializer = JobSyncSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({"ok": True}, status=201)
+            try:
+                serializer.save()
+                return Response({"ok": True, "message": "Oficio creado"}, status=201)
+            except IntegrityError:
+                return Response(
+                    {"error": "El oficio con este ID ya existe"},
+                    status=400
+                )
         return Response(serializer.errors, status=400)
 
     def put(self, request, pk):
-        """
-        Actualizar oficio desde Express
-        """
-        from .models import Job
+        """Actualizar oficio desde Express"""
         from .serializers import JobSyncSerializer
 
         try:
             job = Job.objects.get(pk=pk)
         except Job.DoesNotExist:
-            return Response({"error": "Job not found"}, status=404)
+            return Response({"error": "Oficio no encontrado"}, status=404)
 
         serializer = JobSyncSerializer(job, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"ok": True})
+            return Response({"ok": True, "message": "Oficio actualizado"})
         return Response(serializer.errors, status=400)
+
+    def delete(self, request, pk):
+        """Eliminar oficio desde Express"""
+        try:
+            job = Job.objects.get(pk=pk)
+            job.delete()
+            return Response({"ok": True, "message": "Oficio eliminado"})
+        except Job.DoesNotExist:
+            return Response({"error": "Oficio no encontrado"}, status=404)
 
 
 class SyncUserView(APIView):
+    """
+    Sincronizar usuarios desde Express
+    """
     def post(self, request):
-        """
-        Crear usuario desde Express
-        """
+        """Crear usuario desde Express"""
         from .serializers import UserSyncSerializer
+        
         serializer = UserSyncSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({"ok": True}, status=201)
+            try:
+                serializer.save()
+                return Response({"ok": True, "message": "Usuario creado"}, status=201)
+            except IntegrityError:
+                return Response(
+                    {"error": "El usuario con este UID ya existe"},
+                    status=400
+                )
         return Response(serializer.errors, status=400)
 
     def put(self, request, pk):
-        """
-        Actualizar usuario desde Express
-        """
-        from .models import UserAnalytics
+        """Actualizar usuario desde Express"""
         from .serializers import UserSyncSerializer
 
         try:
             user = UserAnalytics.objects.get(pk=pk)
         except UserAnalytics.DoesNotExist:
-            return Response({"error": "User not found"}, status=404)
+            return Response({"error": "Usuario no encontrado"}, status=404)
 
         serializer = UserSyncSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"ok": True})
+            return Response({"ok": True, "message": "Usuario actualizado"})
         return Response(serializer.errors, status=400)
 
 
 class SyncReviewView(APIView):
+    """
+    Sincronizar reseñas desde Express
+    """
     def post(self, request):
-        """
-        Crear review desde Express
-        """
+        """Crear review desde Express"""
         from .serializers import ReviewSyncSerializer
+        
         serializer = ReviewSyncSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({"ok": True}, status=201)
+            try:
+                serializer.save()
+                return Response({"ok": True, "message": "Reseña creada"}, status=201)
+            except IntegrityError:
+                return Response(
+                    {"error": "La reseña con este ID ya existe"},
+                    status=400
+                )
         return Response(serializer.errors, status=400)
 
     def delete(self, request, pk):
-        """
-        Eliminar review desde Express
-        """
+        """Eliminar review desde Express"""
         try:
-            ReviewAnalytics.objects.get(pk=pk).delete()
+            review = ReviewAnalytics.objects.get(pk=pk)
+            review.delete()
+            return Response({"ok": True, "message": "Reseña eliminada"})
         except ReviewAnalytics.DoesNotExist:
-            return Response({"error": "Review not found"}, status=404)
-
-        return Response({"ok": True})
+            return Response({"error": "Reseña no encontrada"}, status=404)
 
 
 # ===========================
-# 📊 ANALYTICS VIEWS (DJANGO → EXPRESS)
+# ANALYTICS VIEWS (DJANGO a EXPRESS)
 # ===========================
 
 class UsersStatsView(APIView):
+    """
+    Estadísticas de usuarios
+    """
     def get(self, request):
-        total = UserAnalytics.objects.count()
-        workers = UserAnalytics.objects.filter(is_worker=True).count()
-        clients = total - workers
+        try:
+            total = UserAnalytics.objects.count()
+            workers = UserAnalytics.objects.filter(is_worker=True).count()
+            clients = total - workers
 
-        users_by_month = (
-            UserAnalytics.objects
-            .annotate(month=TruncMonth("created_at"))
-            .values("month")
-            .annotate(total=Count("uid"))
-            .order_by("month")
-        )
+            # Usuarios por mes
+            users_by_month = (
+                UserAnalytics.objects
+                .annotate(month=TruncMonth("created_at"))
+                .values("month")
+                .annotate(total=Count("uid"))
+                .order_by("month")
+            )
 
-        formatted = [
-            {
-                "month": item["month"].strftime("%Y-%m"),
-                "total": item["total"]
-            }
-            for item in users_by_month
-            if item["month"]
-        ]
+            formatted = [
+                {
+                    "month": item["month"].strftime("%Y-%m") if item["month"] else None,
+                    "total": item["total"]
+                }
+                for item in users_by_month
+                if item["month"]
+            ]
 
-        return Response({
-            "total_users": total,
-            "workers": workers,
-            "clients": clients,
-            "users_by_month": formatted
-        })
+            return Response({
+                "success": True,
+                "data": {
+                    "total_users": total,
+                    "workers": workers,
+                    "clients": clients,
+                    "users_by_month": formatted
+                }
+            })
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=500
+            )
 
 
 class WorkersStatsView(APIView):
+    """
+    Estadísticas de trabajadores
+    """
     def get(self, request):
-        workers_by_job = (
-            UserAnalytics.objects.filter(is_worker=True)
-            .values("job__id", "job__name")
-            .annotate(total=Count("uid"))
-            .order_by("-total")
-        )
+        try:
+            # Trabajadores por oficio
+            workers_by_job = (
+                UserAnalytics.objects.filter(is_worker=True)
+                .values("job__id", "job__name")
+                .annotate(total=Count("uid"))
+                .order_by("-total")
+            )
 
-        top_workers = (
-            UserAnalytics.objects.filter(is_worker=True)
-            .annotate(avg_score=Avg("reviews_received__score"))
-            .order_by("-avg_score")[:10]
-        )
+            # Top trabajadores por puntuación
+            top_workers = (
+                UserAnalytics.objects.filter(is_worker=True)
+                .annotate(avg_score=Avg("reviews_received__score"))
+                .filter(avg_score__isnull=False)  # Solo con reseñas
+                .order_by("-avg_score")[:10]
+            )
 
-        top_list = [
-            {
-                "uid": w.uid,
-                "name": w.name,
-                "job": w.job.name if w.job else None,
-                "avg_score": round(w.avg_score or 0, 2)
-            }
-            for w in top_workers
-        ]
+            top_list = [
+                {
+                    "uid": w.uid,
+                    "name": w.name,
+                    "job": w.job.name if w.job else None,
+                    "avg_score": round(float(w.avg_score or 0), 2)
+                }
+                for w in top_workers
+            ]
 
-        return Response({
-            "workers_by_job": workers_by_job,
-            "top_workers": top_list
-        })
+            return Response({
+                "success": True,
+                "data": {
+                    "workers_by_job": list(workers_by_job),
+                    "top_workers": top_list
+                }
+            })
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=500
+            )
 
 
 class ReviewsStatsView(APIView):
+    """
+    Estadísticas de reseñas
+    """
     def get(self, request):
-        global_avg = ReviewAnalytics.objects.aggregate(avg=Avg("score"))["avg"] or 0
+        try:
+            # Promedio global
+            global_avg = ReviewAnalytics.objects.aggregate(avg=Avg("score"))["avg"] or 0
 
-        avg_by_job = (
-            ReviewAnalytics.objects
-            .values("reviewed__job__name")
-            .annotate(avg_score=Avg("score"))
-            .order_by("reviewed__job__name")
-        )
+            # Promedio por oficio
+            avg_by_job = (
+                ReviewAnalytics.objects
+                .values("reviewed__job__name")
+                .annotate(avg_score=Avg("score"))
+                .order_by("reviewed__job__name")
+            )
 
-        return Response({
-            "global_average": round(global_avg, 2),
-            "average_by_job": avg_by_job
-        })
+            # Total de reseñas
+            total_reviews = ReviewAnalytics.objects.count()
+
+            # Distribución de scores
+            score_distribution = (
+                ReviewAnalytics.objects
+                .values("score")
+                .annotate(count=Count("id"))
+                .order_by("score")
+            )
+
+            return Response({
+                "success": True,
+                "data": {
+                    "global_average": round(float(global_avg), 2),
+                    "total_reviews": total_reviews,
+                    "average_by_job": list(avg_by_job),
+                    "score_distribution": list(score_distribution)
+                }
+            })
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=500
+            )
