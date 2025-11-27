@@ -12,74 +12,40 @@ from rest_framework import status
 # ===========================
 
 class SyncJobView(APIView):
-    """
-    Sincronizar oficios desde Express
-    """
     def post(self, request):
-        """Crear oficio desde Express"""
         from .serializers import JobSyncSerializer
-        
         serializer = JobSyncSerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                serializer.save()
-                return Response({"ok": True, "message": "Oficio creado"}, status=201)
-            except IntegrityError:
-                return Response(
-                    {"error": "El oficio con este ID ya existe"},
-                    status=400
-                )
+            serializer.save()
+            return Response({"ok": True, "message": "Job creado"}, status=201)
         return Response(serializer.errors, status=400)
 
     def put(self, request, pk):
-        """Actualizar oficio desde Express"""
         from .serializers import JobSyncSerializer
-
         try:
             job = Job.objects.get(pk=pk)
         except Job.DoesNotExist:
-            return Response({"error": "Oficio no encontrado"}, status=404)
+            return Response({"error": "Job no encontrado"}, status=404)
 
         serializer = JobSyncSerializer(job, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"ok": True, "message": "Oficio actualizado"})
+            return Response({"ok": True, "message": "Job actualizado"})
         return Response(serializer.errors, status=400)
 
-    def delete(self, request, pk):
-        """Eliminar oficio desde Express"""
-        try:
-            job = Job.objects.get(pk=pk)
-            job.delete()
-            return Response({"ok": True, "message": "Oficio eliminado"})
-        except Job.DoesNotExist:
-            return Response({"error": "Oficio no encontrado"}, status=404)
 
 
 class SyncUserView(APIView):
-    """
-    Sincronizar usuarios desde Express
-    """
     def post(self, request):
-        """Crear usuario desde Express"""
         from .serializers import UserSyncSerializer
-        
         serializer = UserSyncSerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                serializer.save()
-                return Response({"ok": True, "message": "Usuario creado"}, status=201)
-            except IntegrityError:
-                return Response(
-                    {"error": "El usuario con este UID ya existe"},
-                    status=400
-                )
+            serializer.save()
+            return Response({"ok": True, "message": "Usuario creado"}, status=201)
         return Response(serializer.errors, status=400)
 
     def put(self, request, pk):
-        """Actualizar usuario desde Express"""
         from .serializers import UserSyncSerializer
-
         try:
             user = UserAnalytics.objects.get(pk=pk)
         except UserAnalytics.DoesNotExist:
@@ -88,38 +54,30 @@ class SyncUserView(APIView):
         serializer = UserSyncSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"ok": True, "message": "Usuario actualizado"})
+            return Response({"ok": True})
         return Response(serializer.errors, status=400)
+
 
 
 class SyncReviewView(APIView):
-    """
-    Sincronizar reseñas desde Express
-    """
     def post(self, request):
-        """Crear review desde Express"""
         from .serializers import ReviewSyncSerializer
-        
         serializer = ReviewSyncSerializer(data=request.data)
+
         if serializer.is_valid():
-            try:
-                serializer.save()
-                return Response({"ok": True, "message": "Reseña creada"}, status=201)
-            except IntegrityError:
-                return Response(
-                    {"error": "La reseña con este ID ya existe"},
-                    status=400
-                )
+            serializer.save()
+            return Response({"ok": True, "message": "Review creada"}, status=201)
+
         return Response(serializer.errors, status=400)
 
     def delete(self, request, pk):
-        """Eliminar review desde Express"""
         try:
             review = ReviewAnalytics.objects.get(pk=pk)
             review.delete()
-            return Response({"ok": True, "message": "Reseña eliminada"})
+            return Response({"ok": True, "message": "Review eliminada"})
         except ReviewAnalytics.DoesNotExist:
-            return Response({"error": "Reseña no encontrada"}, status=404)
+            return Response({"error": "Review no encontrada"}, status=404)
+
 
 
 # ===========================

@@ -3,16 +3,15 @@ from django.db import models
 
 class Job(models.Model):
     """
-    Oficios (plomero, electricista, etc.)
-    Usa el mismo ID entero que en TROFI (Express/Firebase).
+    Oficios sincronizados desde Firebase/Express.
+    firebase_key = ID real de Firebase (-Oew_...)
+    id = autoincremental local en Django.
     """
-    id = models.IntegerField(primary_key=True)  
     name = models.CharField(max_length=100)
+    firebase_key = models.CharField(max_length=200, unique=True, default="")
 
     class Meta:
         db_table = 'analytics_job'
-        verbose_name = 'Oficio'
-        verbose_name_plural = 'Oficios'
 
     def __str__(self):
         return f"{self.id} - {self.name}"
@@ -20,14 +19,16 @@ class Job(models.Model):
 
 class UserAnalytics(models.Model):
     """
-    Usuario simplificado para analíticas.
-    Usa el UID de Firebase / TROFI como primary key.
+    Usuarios sincronizados desde Firebase.
+    uid = UID real de Firebase.
+    job = FK a Job.
     """
-    uid = models.CharField(max_length=100, primary_key=True) 
+    uid = models.CharField(max_length=100, primary_key=True)
     name = models.CharField(max_length=255)
     email = models.EmailField()
     is_worker = models.BooleanField(default=False)
     created_at = models.DateTimeField()
+
     job = models.ForeignKey(
         Job,
         null=True,
@@ -38,8 +39,6 @@ class UserAnalytics(models.Model):
 
     class Meta:
         db_table = 'analytics_user'
-        verbose_name = 'Usuario'
-        verbose_name_plural = 'Usuarios'
         indexes = [
             models.Index(fields=['is_worker']),
             models.Index(fields=['created_at']),
@@ -51,9 +50,7 @@ class UserAnalytics(models.Model):
 
 class ReviewAnalytics(models.Model):
     """
-    Reseñas utilizadas para calcular promedios.
-    Usa el ID (key push) de TROFI como primary key.
-    Soporta scores decimales (1, 1.5, 2, 2.5, etc.)
+    Reseñas sincronizadas desde Firebase.
     """
     id = models.CharField(max_length=100, primary_key=True)
     reviewer = models.ForeignKey(
@@ -66,23 +63,15 @@ class ReviewAnalytics(models.Model):
         related_name="reviews_received",
         on_delete=models.CASCADE,
     )
-    score = models.DecimalField(
-        max_digits=2,
-        decimal_places=1,
-        help_text="Puntuación de 1.0 a 5.0 (permite medias estrellas)"
-    )
+    score = models.DecimalField(max_digits=2, decimal_places=1)
     description = models.TextField()
     created_at = models.DateTimeField()
 
     class Meta:
         db_table = 'analytics_review'
-        verbose_name = 'Reseña'
-        verbose_name_plural = 'Reseñas'
         indexes = [
             models.Index(fields=['score']),
             models.Index(fields=['created_at']),
-            models.Index(fields=['reviewer']),
-            models.Index(fields=['reviewed']),
         ]
 
     def __str__(self):
